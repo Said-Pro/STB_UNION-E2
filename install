@@ -1,30 +1,27 @@
 #!/bin/sh
 
-# Couleurs
+# ألوان للتنسيق
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# Fonctions
-print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
+print_status()  { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-# Barre de progression simple (compatible busybox)
 progress_bar() {
     local duration=${1}
-    local i=0
-    while [ $i -le 10 ]; do
+    local bars=20
+    local sleep_interval=$(echo "scale=3; $duration/$bars" | bc)
+    for ((i=0; i<=bars; i++)); do
         printf "${BLUE}["
-        j=1
-        while [ $j -le $i ]; do printf "█"; j=$((j+1)); done
-        while [ $j -le 10 ]; do printf " "; j=$((j+1)); done
-        printf "] %d0%%${NC}\r" $i
-        sleep $(echo "$duration/10" | bc 2>/dev/null || echo "0.3")
-        i=$((i+1))
+        for ((j=0; j<i; j++)); do printf "█"; done
+        for ((j=i; j<bars; j++)); do printf " "; done
+        printf "] %3d%%${NC}\r" $((i*100/bars))
+        sleep $sleep_interval
     done
     printf "\n"
 }
@@ -36,20 +33,16 @@ echo "          STB_UNION E2 V1.0"
 echo "=============================================="
 echo ""
 
-# ==============================================
-# 1. VÉRIFICATION DE LA CONNEXION INTERNET
-# ==============================================
+# Vérification connexion internet
 print_status "Checking internet connection..."
 if ping -c 1 github.com >/dev/null 2>&1; then
-    print_success "Internet connection OK"
+    print_success "Internet connection is available"
 else
     print_error "No internet connection!"
     exit 1
 fi
 
-# ==============================================
-# 2. TÉLÉCHARGEMENT
-# ==============================================
+# Téléchargement
 print_status "Downloading STB_UNION-E2 from GitHub..."
 if wget -O /tmp/STB_UNION-E2.tar.gz https://github.com/ilyasM6/STB_UNION-E2/raw/refs/heads/main/STB_UNION-E2.tar.gz; then
     print_success "Download completed successfully"
@@ -58,224 +51,60 @@ else
     exit 1
 fi
 
-# ==============================================
-# 3. VÉRIFICATION DE L'ARCHIVE (intégrité + contenu)
-# ==============================================
-print_status "Verifying archive integrity..."
-if tar -tzf /tmp/STB_UNION-E2.tar.gz >/dev/null 2>&1; then
-    print_success "Archive is valid and not corrupted"
-else
-    print_error "Archive is corrupted or invalid!"
-    exit 1
-fi
+# Création du répertoire cible (sécurité)
+mkdir -p /usr/lib/enigma2/python/Plugins/Extensions
 
-# Affichage du contenu de l'archive
-print_status "Analyzing archive content..."
-echo ""
-echo "=== Contenu de l'archive (premiers fichiers) ==="
-tar -tzf /tmp/STB_UNION-E2.tar.gz | head -20
-echo ""
-echo "=== Nombre total de fichiers ==="
-NB_TOTAL=$(tar -tzf /tmp/STB_UNION-E2.tar.gz | wc -l)
-echo "$NB_TOTAL fichiers dans l'archive"
-echo ""
-echo "=== Structure des dossiers (niveaux 1 et 2) ==="
-tar -tzf /tmp/STB_UNION-E2.tar.gz | cut -d'/' -f1-2 | sort -u
-echo ""
-
-print_success "Archive analysis completed"
-
-# ==============================================
-# 4. PRÉPARATION DU RÉPERTOIRE DE DESTINATION
-# ==============================================
-DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
-print_status "Preparing destination directory..."
-
-if [ ! -d "$DEST_DIR" ]; then
-    print_warning "Destination directory does not exist. Creating it..."
-    if mkdir -p "$DEST_DIR"; then
-        print_success "Directory created: $DEST_DIR"
-    else
-        print_error "Failed to create directory: $DEST_DIR"
-        exit 1
-    fi
-else
-    print_success "Destination directory exists: $DEST_DIR"
-fi
-
-# Vérification des permissions d'écriture
-if [ -w "$DEST_DIR" ]; then
-    print_success "Write permission OK on $DEST_DIR"
-else
-    print_error "No write permission on $DEST_DIR"
-    exit 1
-fi
-
-# ==============================================
-# 5. EXTRACTION DE L'ARCHIVE
-# ==============================================
-print_status "Extracting plugin to destination directory..."
+# Extraction
+print_status "Extracting files to plugins directory..."
 cd /tmp/ || exit 1
-
-if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR"; then
+if tar -xzf STB_UNION-E2.tar.gz -C /usr/lib/enigma2/python/Plugins/Extensions; then
     print_success "Extraction completed successfully"
 else
     print_error "Extraction failed!"
     exit 1
 fi
 
-# ==============================================
-# 6. VÉRIFICATION POST-EXTRACTION (bloc complet)
-# ==============================================
-print_status "Verifying plugin installation..."
+# Nettoyage
+print_status "Cleaning temporary files..."
+rm -f /tmp/STB_UNION-E2.tar.gz
+print_success "Temporary files removed"
 
-# Récupérer le nom du dossier extrait
-PLUGIN_FOLDER=$(tar -tzf STB_UNION-E2.tar.gz 2>/dev/null | head -1 | cut -d'/' -f1)
+# Mise à jour des paquets
+print_status "Updating package list and installing dependencies..."
+print_warning "This may take a few minutes..."
+progress_bar 5
 
-echo ""
-echo "=== VÉRIFICATION DÉTAILLÉE ==="
-
-# Vérification 1: Le dossier du plugin existe-t-il ?
-if [ -n "$PLUGIN_FOLDER" ] && [ -d "$DEST_DIR/$PLUGIN_FOLDER" ]; then
-    print_success "✅ Plugin folder found: $DEST_DIR/$PLUGIN_FOLDER"
-    
-    # Vérification 2: Fichiers importants présents ?
-    if [ -f "$DEST_DIR/$PLUGIN_FOLDER/__init__.py" ]; then
-        print_success "✅ __init__.py found"
-    else
-        print_warning "⚠️ __init__.py not found (may not be required)"
-    fi
-    
-    if [ -f "$DEST_DIR/$PLUGIN_FOLDER/plugin.py" ]; then
-        print_success "✅ plugin.py found"
-    else
-        print_warning "⚠️ plugin.py not found (check plugin structure)"
-    fi
-    
-    # Vérification 3: Compter les fichiers installés
-    NB_FILES=$(find "$DEST_DIR/$PLUGIN_FOLDER" -type f 2>/dev/null | wc -l)
-    print_success "✅ $NB_FILES files installed"
-    
-    # Vérification 4: Afficher le contenu du plugin
-    echo ""
-    echo "=== Plugin contents ==="
-    ls -la "$DEST_DIR/$PLUGIN_FOLDER/" | head -15
-    
-    # Vérification 5: Taille totale du plugin
-    PLUGIN_SIZE=$(du -sh "$DEST_DIR/$PLUGIN_FOLDER" 2>/dev/null | cut -f1)
-    echo ""
-    print_success "✅ Plugin size: $PLUGIN_SIZE"
-    
+if opkg update; then
+    print_success "Package list updated"
 else
-    print_error "❌ Plugin verification failed!"
-    print_error "No plugin folder found in $DEST_DIR"
-    
-    # Recherche alternative
-    echo ""
-    print_status "Searching for installed plugin..."
-    find "$DEST_DIR" -type d -name "*UNION*" -o -name "*union*" 2>/dev/null
+    print_warning "Failed to update package list (opkg not found or network issue)"
+fi
+
+# ─────────────────────────────────────────────
+# Redémarrage Enigma2 — méthode unifiée
+# Priorité : init 4/3  →  systemctl  →  init.d
+# ─────────────────────────────────────────────
+print_status "Restarting Enigma2..."
+print_warning "Please wait while the system restarts..."
+progress_bar 3
+
+if command -v init >/dev/null 2>&1; then
+    print_status "Using init runlevel method (init 4 && init 3)..."
+    init 4 && init 3
+elif command -v systemctl >/dev/null 2>&1; then
+    print_status "Using systemctl..."
+    systemctl restart enigma2
+elif [ -f /etc/init.d/enigma2 ]; then
+    print_status "Using init.d script..."
+    /etc/init.d/enigma2 restart
+else
+    print_error "Cannot restart Enigma2 automatically. Please restart manually."
     exit 1
 fi
 
 echo ""
-print_success "STB_UNION E2 has been successfully installed to: $DEST_DIR/$PLUGIN_FOLDER"
-
-# ==============================================
-# 7. NETTOYAGE DE /tmp (supprimer toutes les traces)
-# ==============================================
-print_status "Cleaning all temporary files from /tmp..."
-
-# Supprimer l'archive
-if [ -f /tmp/STB_UNION-E2.tar.gz ]; then
-    rm -f /tmp/STB_UNION-E2.tar.gz
-    print_success "Removed: /tmp/STB_UNION-E2.tar.gz"
-fi
-
-# Supprimer le dossier extrait s'il existe dans /tmp
-if [ -d /tmp/STB_UNION-E2 ]; then
-    rm -rf /tmp/STB_UNION-E2
-    print_success "Removed directory: /tmp/STB_UNION-E2"
-fi
-
-# Supprimer tous les fichiers/dossiers commençant par STB_UNION-E2 dans /tmp
-for item in /tmp/STB_UNION-E2*; do
-    if [ "$item" != "/tmp/STB_UNION-E2*" ] && [ -e "$item" ]; then
-        rm -rf "$item"
-        print_success "Removed: $item"
-    fi
-done
-
-print_success "All traces of STB_UNION-E2 have been removed from /tmp"
-
-# ==============================================
-# 8. OPTION DE REDÉMARRAGE AVEC init 4 && init 3
-# ==============================================
-echo ""
 echo "=============================================="
-print_status "Receiver restart option"
+print_success "Installation completed successfully!"
+print_success "STB_UNION E2 has been installed and activated"
 echo "=============================================="
 echo ""
-echo "Do you want to restart the GUI now?"
-echo ""
-echo "  1) Yes, restart now (init 4 && init 3 - recommended)"
-echo "  2) No, I will restart manually later"
-echo ""
-printf "Choose option (1 or 2): "
-read -r RESTART_OPTION
-
-case $RESTART_OPTION in
-    1)
-        print_status "Restarting Enigma2 GUI using init 4 && init 3..."
-        print_warning "Please wait while the GUI restarts..."
-        progress_bar 2
-        
-        # Commande spécifique Enigma2 pour redémarrer l'interface graphique
-        init 4 && init 3
-        
-        # Vérifier si la commande a réussi
-        if [ $? -eq 0 ]; then
-            print_success "GUI restart command executed successfully"
-        else
-            print_warning "init 4 && init 3 failed, trying alternative methods..."
-            
-            # Méthodes alternatives si la première échoue
-            if command -v systemctl >/dev/null 2>&1; then
-                systemctl restart enigma2
-            elif [ -f /etc/init.d/enigma2 ]; then
-                /etc/init.d/enigma2 restart
-            else
-                print_error "Cannot restart automatically. Please restart manually."
-                exit 1
-            fi
-        fi
-        
-        echo ""
-        echo "=============================================="
-        print_success "Installation completed successfully!"
-        print_success "STB_UNION E2 has been installed and activated"
-        print_success "The GUI is now restarting..."
-        echo "=============================================="
-        ;;
-        
-    2)
-        print_success "Installation completed successfully!"
-        print_success "STB_UNION E2 has been installed"
-        print_warning "Please restart your receiver manually to activate the plugin"
-        echo ""
-        echo "To restart the GUI manually, use one of these commands:"
-        echo "  - init 4 && init 3    (recommended for Enigma2)"
-        echo "  - systemctl restart enigma2"
-        echo "  - /etc/init.d/enigma2 restart"
-        echo "  - reboot"
-        ;;
-        
-    *)
-        print_error "Invalid option! Please run the script again."
-        exit 1
-        ;;
-esac
-
-echo ""
-echo "=============================================="
-print_success "STB_UNION E2 Installation Script completed"
-echo "=============================================="
