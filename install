@@ -12,20 +12,6 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-progress_bar() {
-    local duration=${1}
-    local bars=20
-    local sleep_interval=$(echo "scale=3; $duration/$bars" | bc)
-    for ((i=0; i<=bars; i++)); do
-        printf "${BLUE}["
-        for ((j=0; j<i; j++)); do printf "█"; done
-        for ((j=i; j<bars; j++)); do printf " "; done
-        printf "] %3d%%${NC}\r" $((i*100/bars))
-        sleep $sleep_interval
-    done
-    printf "\n"
-}
-
 clear
 echo "=============================================="
 echo "    STB_UNION E2 Installation Script"
@@ -53,74 +39,73 @@ if [ $? -ne 0 ] || [ ! -s /tmp/STB_UNION-E2.tar.gz ]; then
 fi
 print_success "Download completed successfully"
 
-# ── 3. Extraction dans /tmp ───────────────────────────────
-print_status "Extracting archive in /tmp..."
-cd /tmp || exit 1
+# ── 3. Extraction DIRECTE vers le dossier des plugins ─────
+DEST="/usr/lib/enigma2/python/Plugins/Extensions"
+print_status "Extracting directly to $DEST ..."
 
-# Supprimer toute extraction précédente
-rm -rf /tmp/STB_UNION-E2 "/tmp/STB_UNION E2"
+# Créer le dossier de destination s'il n'existe pas
+mkdir -p "$DEST"
 
-tar -xzf STB_UNION-E2.tar.gz -C /tmp/
+# Supprimer l'ancienne version si elle existe
+if [ -d "$DEST/STB_UNION E2" ]; then
+    print_warning "Removing old version..."
+    rm -rf "$DEST/STB_UNION E2"
+fi
+
+# Extraire l'archive directement dans le dossier Extensions
+tar -xzf /tmp/STB_UNION-E2.tar.gz -C "$DEST"
 
 if [ $? -ne 0 ]; then
     print_error "Extraction failed!"
     exit 1
 fi
-print_success "Archive extracted successfully"
+print_success "Archive extracted successfully to $DEST"
 
-# ── 4. Détecter le dossier extrait et le renommer ─────────
-print_status "Detecting extracted folder..."
+# ── 4. Renommer le dossier extrait (si nécessaire) ────────
+print_status "Checking extracted folder name..."
 
-# Cherche le dossier extrait (nom variable selon l'archive)
-EXTRACTED=$(find /tmp -maxdepth 1 -type d -name "STB_UNION*" | head -n 1)
+# Chercher le dossier qui vient d'être extrait (nom variable selon l'archive)
+EXTRACTED=$(find "$DEST" -maxdepth 1 -type d -name "STB_UNION*" ! -name "STB_UNION E2" | head -n 1)
 
-if [ -z "$EXTRACTED" ]; then
-    print_error "Could not find extracted folder in /tmp!"
-    exit 1
-fi
-
-print_status "Found: $EXTRACTED"
-
-# Renommer en "STB_UNION E2" (avec espace) si pas déjà correct
-if [ "$EXTRACTED" != "/tmp/STB_UNION E2" ]; then
-    mv "$EXTRACTED" "/tmp/STB_UNION E2"
+if [ -n "$EXTRACTED" ] && [ "$EXTRACTED" != "$DEST/STB_UNION E2" ]; then
+    print_status "Renaming '$EXTRACTED' to 'STB_UNION E2'..."
+    mv "$EXTRACTED" "$DEST/STB_UNION E2"
     if [ $? -ne 0 ]; then
         print_error "Rename failed!"
         exit 1
     fi
+    print_success "Folder renamed to 'STB_UNION E2'"
+else
+    print_success "Folder already has correct name or no rename needed"
 fi
-print_success "Folder renamed to 'STB_UNION E2'"
 
-# ── 5. Transfert vers le répertoire des plugins ───────────
-DEST="/usr/lib/enigma2/python/Plugins/Extensions"
-print_status "Transferring to $DEST ..."
-
-mkdir -p "$DEST"
-
-# Supprimer l'ancienne version si elle existe
-rm -rf "$DEST/STB_UNION E2"
-
-mv "/tmp/STB_UNION E2" "$DEST/"
+# ── 5. Supprimer le fichier temporaire ────────────────────
+print_status "Removing temporary file..."
+rm -f /tmp/STB_UNION-E2.tar.gz
 
 if [ $? -ne 0 ]; then
-    print_error "Transfer to plugins directory failed!"
+    print_warning "Could not remove temporary file, but installation continues"
+else
+    print_success "Temporary file deleted: /tmp/STB_UNION-E2.tar.gz"
+fi
+
+# ── 6. Vérification finale de l'installation ──────────────
+if [ -d "$DEST/STB_UNION E2" ]; then
+    print_success "Plugin successfully installed at: $DEST/STB_UNION E2"
+    ls -la "$DEST/STB_UNION E2" | head -5
+else
+    print_error "Plugin installation failed! Folder not found."
     exit 1
 fi
-print_success "Plugin installed at: $DEST/STB_UNION E2"
 
-# ── 6. Nettoyage ──────────────────────────────────────────
-print_status "Cleaning temporary files..."
-rm -f /tmp/STB_UNION-E2.tar.gz
-print_success "Temporary files removed"
-
-# ── 7. Redémarrage du récepteur ───────────────────────────
+# ── 7. Redémarrage d'Enigma2 ──────────────────────────────
 echo ""
-print_status "Restarting the receiver..."
+print_status "Restarting Enigma2..."
 print_warning "Please wait while the system restarts..."
-progress_bar 3
 
+# Méthodes de redémarrage (ordre de priorité)
 if command -v init >/dev/null 2>&1; then
-    print_status "Restarting via init 4 && init 3 ..."
+    print_status "Restarting via init 4 && init 3..."
     init 4 && init 3
 elif command -v systemctl >/dev/null 2>&1; then
     print_status "Restarting via systemctl..."
