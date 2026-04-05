@@ -1,41 +1,34 @@
+cat > /tmp/install_stb_union.sh << 'EOF'
 #!/bin/sh
 
-# ألوان للتنسيق
+# ==============================================
+# STB_UNION E2 - Script d'installation complet
+# ==============================================
+
+# Couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# دالة للطباعة الملونة
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# Fonctions
+print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-# دالة شريط التقدم
+# Barre de progression simple (compatible busybox)
 progress_bar() {
     local duration=${1}
-    local bars=20
-    local sleep_interval=$(echo "scale=3; $duration/$bars" | bc)
-    
-    for ((i=0; i<=bars; i++)); do
+    local i=0
+    while [ $i -le 10 ]; do
         printf "${BLUE}["
-        for ((j=0; j<i; j++)); do printf "█"; done
-        for ((j=i; j<bars; j++)); do printf " "; done
-        printf "] %3d%%${NC}\r" $((i*100/bars))
-        sleep $sleep_interval
+        for j in $(seq 1 $i); do printf "█"; done
+        for j in $(seq $i 9); do printf " "; done
+        printf "] %d0%%${NC}\r" $i
+        sleep $(echo "$duration/10" | bc 2>/dev/null || echo "0.3")
+        i=$((i+1))
     done
     printf "\n"
 }
@@ -47,132 +40,93 @@ echo "          STB_UNION E2 V1.0"
 echo "=============================================="
 echo ""
 
-# التحقق من الاتصال بالإنترنت
+# Vérification de la connexion internet
 print_status "Checking internet connection..."
 if ping -c 1 github.com >/dev/null 2>&1; then
-    print_success "Internet connection is available"
+    print_success "Internet connection OK"
 else
     print_error "No internet connection!"
     exit 1
 fi
 
-# التنزيل
+# Téléchargement
 print_status "Downloading STB_UNION-E2 from GitHub..."
 if wget -O /tmp/STB_UNION-E2.tar.gz https://github.com/ilyasM6/STB_UNION-E2/raw/refs/heads/main/STB_UNION-E2.tar.gz; then
-    print_success "Download completed successfully"
+    print_success "Download completed (3608 KB)"
 else
     print_error "Download failed!"
     exit 1
 fi
 
-# ==============================================
-# فك الضغط وتثبيت الملفات
-# ==============================================
-
-# التأكد من وجود المجلد الوجهة
-DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
-PLUGIN_NAME="STB_UNION E2"
-
-print_status "Checking destination directory..."
-
-if [ ! -d "$DEST_DIR" ]; then
-    print_warning "Destination directory does not exist. Creating it..."
-    if mkdir -p "$DEST_DIR"; then
-        print_success "Directory created: $DEST_DIR"
-    else
-        print_error "Failed to create directory: $DEST_DIR"
-        exit 1
-    fi
+# Vérification de l'archive
+print_status "Verifying archive integrity..."
+if tar -tzf /tmp/STB_UNION-E2.tar.gz >/dev/null 2>&1; then
+    print_success "Archive is valid"
 else
-    print_success "Destination directory exists"
-fi
-
-# فك الضغط
-print_status "Extracting $PLUGIN_NAME to plugins directory..."
-cd /tmp/ || exit 1
-
-# فك الضغط مباشرة إلى المجلد الوجهة
-if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR"; then
-    print_success "Extraction completed successfully"
-else
-    print_error "Extraction failed!"
-    print_error "Please check if the archive is corrupted or destination is writable"
+    print_error "Archive is corrupted!"
     exit 1
 fi
 
-# ==============================================
-# التحقق من وجود الملفات بعد التثبيت
-# ==============================================
+# Analyse du contenu
+print_status "Analyzing archive content..."
+ARCHIVE_CONTENT=$(tar -tzf /tmp/STB_UNION-E2.tar.gz | head -5)
+print_success "Archive contains:"
+echo "$ARCHIVE_CONTENT" | while read line; do echo "   - $line"; done
 
-print_status "Verifying plugin installation..."
+# Création du répertoire destination
+DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
+print_status "Preparing destination directory..."
+mkdir -p "$DEST_DIR"
+if [ -d "$DEST_DIR" ]; then
+    print_success "Directory ready: $DEST_DIR"
+else
+    print_error "Cannot create directory!"
+    exit 1
+fi
 
-# الحصول على اسم المجلد المستخرج من الأرشيف
-EXTRACTED_FOLDER=$(tar -tzf STB_UNION-E2.tar.gz 2>/dev/null | head -1 | cut -d '/' -f1)
+# Extraction
+print_status "Extracting plugin..."
+cd /tmp/ || exit 1
+if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR"; then
+    print_success "Extraction completed"
+else
+    print_error "Extraction failed!"
+    exit 1
+fi
 
-# التحقق من وجود المجلد المستخرج
-if [ -n "$EXTRACTED_FOLDER" ] && [ -d "$DEST_DIR/$EXTRACTED_FOLDER" ]; then
-    print_success "Plugin folder found: $DEST_DIR/$EXTRACTED_FOLDER"
+# Vérification post-extraction
+print_status "Verifying installation..."
+PLUGIN_FOLDER=$(tar -tzf STB_UNION-E2.tar.gz 2>/dev/null | head -1 | cut -d'/' -f1)
+
+if [ -n "$PLUGIN_FOLDER" ] && [ -d "$DEST_DIR/$PLUGIN_FOLDER" ]; then
+    print_success "Plugin folder found: $DEST_DIR/$PLUGIN_FOLDER"
     
-    # التحقق من وجود ملف __init__.py (مهم لـ enigma2)
-    if [ -f "$DEST_DIR/$EXTRACTED_FOLDER/__init__.py" ] || [ -f "$DEST_DIR/$EXTRACTED_FOLDER/plugin.py" ]; then
-        print_success "Plugin structure is valid (__init__.py or plugin.py found)"
+    # Vérification des fichiers importants
+    if [ -f "$DEST_DIR/$PLUGIN_FOLDER/__init__.py" ] || [ -f "$DEST_DIR/$PLUGIN_FOLDER/plugin.py" ]; then
+        print_success "Plugin structure is valid"
     else
         print_warning "Plugin installed but main files may be missing"
     fi
     
-    # عرض محتويات المجلد للتحقق
-    FILE_COUNT=$(find "$DEST_DIR/$EXTRACTED_FOLDER" -type f 2>/dev/null | wc -l)
-    print_success "Plugin contains $FILE_COUNT files"
+    # Comptage des fichiers
+    NB_FILES=$(find "$DEST_DIR/$PLUGIN_FOLDER" -type f 2>/dev/null | wc -l)
+    print_success "$NB_FILES files installed"
     
-elif [ -d "$DEST_DIR/STB_UNION-E2" ]; then
-    print_success "Plugin folder found: $DEST_DIR/STB_UNION-E2"
-    
-    FILE_COUNT=$(find "$DEST_DIR/STB_UNION-E2" -type f 2>/dev/null | wc -l)
-    print_success "Plugin contains $FILE_COUNT files"
-    
+    # Affichage du contenu
+    print_status "Plugin contents:"
+    ls -la "$DEST_DIR/$PLUGIN_FOLDER/" | head -10 | tail -8
 else
     print_error "Plugin verification failed!"
-    print_error "No plugin folder found in $DEST_DIR"
-    print_error "Installation may be incomplete"
     exit 1
 fi
 
-print_success "$PLUGIN_NAME has been successfully installed to: $DEST_DIR"
+# Nettoyage
+print_status "Cleaning temporary files..."
+rm -f /tmp/STB_UNION-E2.tar.gz
+rm -rf /tmp/STB_UNION-E2*
+print_success "Temporary files removed"
 
-# ==============================================
-# تنظيف الملفات المؤقتة (حذف كل آثار STB_UNION-E2 من /tmp)
-# ==============================================
-
-print_status "Cleaning all temporary files from /tmp..."
-
-# حذف الملف المضغوط
-if [ -f /tmp/STB_UNION-E2.tar.gz ]; then
-    rm -f /tmp/STB_UNION-E2.tar.gz
-    print_success "Removed: /tmp/STB_UNION-E2.tar.gz"
-else
-    print_warning "Archive file not found in /tmp"
-fi
-
-# حذف أي مجلد مستخرج في /tmp (إذا وجد)
-if [ -d /tmp/STB_UNION-E2 ]; then
-    rm -rf /tmp/STB_UNION-E2
-    print_success "Removed directory: /tmp/STB_UNION-E2"
-fi
-
-# حذف أي ملفات أو مجلدات أخرى تحمل نفس الاسم
-for item in /tmp/STB_UNION-E2*; do
-    if [ "$item" != "/tmp/STB_UNION-E2*" ] && [ -e "$item" ]; then
-        rm -rf "$item"
-        print_success "Removed: $item"
-    fi
-done
-
-print_success "All traces of STB_UNION-E2 have been removed from /tmp"
-
-# ==============================================
-# إعادة تشغيل الجهاز (الريسيفر) مع خيار للمستخدم
-# ==============================================
-
+# Option de redémarrage
 echo ""
 echo "=============================================="
 print_status "Receiver restart option"
@@ -189,55 +143,47 @@ read -r RESTART_OPTION
 case $RESTART_OPTION in
     1)
         print_status "Restarting the receiver..."
-        print_warning "Please wait while the receiver restarts..."
-        progress_bar 3
+        progress_bar 2
         
-        # محاولة طرق مختلفة لإعادة التشغيل
         if command -v systemctl >/dev/null 2>&1; then
-            # نظام systemd
-            print_status "Using systemctl to restart enigma2..."
             systemctl restart enigma2
         elif [ -f /etc/init.d/enigma2 ]; then
-            # نظام init.d التقليدي
-            print_status "Using init.d script to restart enigma2..."
             /etc/init.d/enigma2 restart
         elif command -v init >/dev/null 2>&1; then
-            # إعادة تشغيل كاملة للجهاز
-            print_status "Performing full system reboot..."
             init 6
         elif command -v reboot >/dev/null 2>&1; then
-            # أمر reboot
-            print_status "Rebooting the system..."
             reboot
         else
-            print_error "Cannot restart automatically. Please restart your receiver manually."
+            print_error "Cannot restart automatically. Please restart manually."
             exit 1
         fi
         
         echo ""
-        echo "=============================================="
-        print_success "Installation completed successfully!"
-        print_success "$PLUGIN_NAME has been installed and activated"
-        print_success "The receiver is now restarting..."
-        echo "=============================================="
-        echo ""
+        print_success "Installation completed! Receiver is restarting..."
         ;;
     2)
-        print_warning "Receiver will NOT restart automatically"
         print_success "Installation completed successfully!"
-        print_success "$PLUGIN_NAME has been installed"
         print_warning "Please restart your receiver manually to activate the plugin"
         echo ""
-        echo "=============================================="
-        echo "To restart manually, use one of these commands:"
+        echo "Restart commands:"
         echo "  - systemctl restart enigma2"
         echo "  - init 6"
         echo "  - reboot"
-        echo "=============================================="
-        echo ""
         ;;
     *)
-        print_error "Invalid option! Please run the script again."
+        print_error "Invalid option!"
         exit 1
         ;;
 esac
+
+echo ""
+echo "=============================================="
+print_success "STB_UNION E2 has been installed"
+echo "=============================================="
+EOF
+
+# Rendre le script exécutable
+chmod +x /tmp/install_stb_union.sh
+
+# Exécuter le script
+/tmp/install_stb_union.sh
