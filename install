@@ -43,7 +43,7 @@ progress_bar() {
 clear
 echo "=============================================="
 echo "    STB_UNION E2 Installation Script"
-echo "          STB_UNION E2 V4.0"
+echo "          STB_UNION E2 V1.0"
 echo "=============================================="
 echo ""
 
