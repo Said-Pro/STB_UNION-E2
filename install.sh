@@ -1,7 +1,6 @@
-https://github.com/ilyasM6/STB_UNION-E2/blob/main/STB_UNION-E2.tar.gz
 #!/bin/sh
-PLUGIN_DIR="/usr/lib/enigma2/python/Plugins/Extensions/DreamBootManager"
-REPO_URL="https://raw.githubusercontent.com/electroyassine/DreamBootManager/main"
+PLUGIN_DIR="/usr/lib/enigma2/python/Plugins/Extensions/STB_UNION E2"
+REPO_URL="https://github.com/ilyasM6/STB_UNION-E2/raw/refs/heads/main/STB_UNION-E2.tar.gz"
 
 # Create plugin directory
 mkdir -p "$PLUGIN_DIR"
@@ -12,15 +11,15 @@ wget -q -O "$PLUGIN_DIR/__init__.py" "$REPO_URL/__init__.py"
 wget -q -O "$PLUGIN_DIR/plugin.png" "$REPO_URL/plugin.png"
 
 ### Check if plugin installed correctly
-if [ ! -d '/usr/lib/enigma2/python/Plugins/Extensions/DreamBootManager' ]; then
+if [ ! -d '/usr/lib/enigma2/python/Plugins/Extensions/STB_UNION E2' ]; then
   echo "Some thing wrong .. Plugin not installed"
   exit 1
 fi
 
 sync
 echo "#########################################################"
-echo "#      DreamBootManager INSTALLED SUCCESSFULLY          #"
-echo "#                 by electroyassine                     #"              
+echo "#      STB_UNION E2 INSTALLED SUCCESSFULLY              #"
+echo "#                   by Said M.S                         #"              
 echo "#                     support                           #"
 echo "#########################################################"
 echo "#           your Device will RESTART Now                #"
