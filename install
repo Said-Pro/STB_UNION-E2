@@ -66,11 +66,13 @@ else
 fi
 
 # ==============================================
-# فك الضغط (SECTION AMÉLIORÉE)
+# فك الضغط وتثبيت الملفات
 # ==============================================
 
 # التأكد من وجود المجلد الوجهة
 DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
+PLUGIN_NAME="STB_UNION E2"
+
 print_status "Checking destination directory..."
 
 if [ ! -d "$DEST_DIR" ]; then
@@ -86,21 +88,13 @@ else
 fi
 
 # فك الضغط
-print_status "Extracting files to plugins directory..."
+print_status "Extracting $PLUGIN_NAME to plugins directory..."
 cd /tmp/ || exit 1
 
-# فك الضغط مع عرض المحتويات
-print_status "Extracting archive contents..."
-if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR" 2>&1; then
+# فك الضغط مباشرة إلى المجلد الوجهة
+if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR"; then
     print_success "Extraction completed successfully"
-    
-    # عرض اسم المجلد المستخرج للتحقق
-    EXTRACTED_DIR=$(tar -tzf STB_UNION-E2.tar.gz | head -1 | cut -d '/' -f1)
-    if [ -n "$EXTRACTED_DIR" ] && [ -d "$DEST_DIR/$EXTRACTED_DIR" ]; then
-        print_success "Plugin extracted to: $DEST_DIR/$EXTRACTED_DIR"
-    else
-        print_warning "Plugin extracted but folder structure may be different"
-    fi
+    print_success "$PLUGIN_NAME has been installed to: $DEST_DIR"
 else
     print_error "Extraction failed!"
     print_error "Please check if the archive is corrupted or destination is writable"
@@ -108,62 +102,69 @@ else
 fi
 
 # ==============================================
-# تنظيف الملف المؤقت (SECTION AMÉLIORÉE)
+# تنظيف الملفات المؤقتة (حذف كل آثار STB_UNION-E2 من /tmp)
 # ==============================================
 
-print_status "Cleaning temporary files..."
+print_status "Cleaning all temporary files from /tmp..."
 
-# حذف الملف المضغوط المؤقت
-if rm -f /tmp/STB_UNION-E2.tar.gz; then
-    print_success "Temporary archive removed: /tmp/STB_UNION-E2.tar.gz"
+# حذف الملف المضغوط
+if [ -f /tmp/STB_UNION-E2.tar.gz ]; then
+    rm -f /tmp/STB_UNION-E2.tar.gz
+    print_success "Removed: /tmp/STB_UNION-E2.tar.gz"
 else
-    print_warning "Could not remove temporary archive (may not exist or permission denied)"
+    print_warning "Archive file not found in /tmp"
 fi
 
-# تنظيف أي ملفات مؤقتة أخرى (اختياري)
-if [ -d "/tmp/STB_UNION-E2" ]; then
+# حذف أي مجلد مستخرج في /tmp (إذا وجد)
+if [ -d /tmp/STB_UNION-E2 ]; then
     rm -rf /tmp/STB_UNION-E2
-    print_success "Temporary extraction directory cleaned"
+    print_success "Removed directory: /tmp/STB_UNION-E2"
 fi
 
-print_success "All temporary files have been removed"
+# حذف أي ملفات أو مجلدات أخرى تحمل نفس الاسم
+for item in /tmp/STB_UNION-E2*; do
+    if [ "$item" != "/tmp/STB_UNION-E2*" ] && [ -e "$item" ]; then
+        rm -rf "$item"
+        print_success "Removed: $item"
+    fi
+done
+
+print_success "All traces of STB_UNION-E2 have been removed from /tmp"
 
 # ==============================================
-# CONTINUATION DU SCRIPT
+# إعادة تشغيل الجهاز (الريسيفر)
 # ==============================================
 
-# تثبيت الحزم المطلوبة
-print_status "Updating package list and installing dependencies..."
-print_warning "This may take a few minutes..."
-progress_bar 5
-
-if opkg update; then
-    print_success "Package list updated"
-else
-    print_error "Failed to update package list (opkg not found or network issue)"
-    # Continue anyway, as dependencies might already be installed
-fi
-
-# إعادة التشغيل
-print_status "Restarting Enigma2..."
-print_warning "Please wait while the system restarts..."
+print_status "Restarting the receiver..."
+print_warning "Please wait while the receiver restarts..."
 progress_bar 3
 
+# محاولة طرق مختلفة لإعادة التشغيل
 if command -v systemctl >/dev/null 2>&1; then
+    # نظام systemd
+    print_status "Using systemctl to restart enigma2..."
     systemctl restart enigma2
+elif [ -f /etc/init.d/enigma2 ]; then
+    # نظام init.d التقليدي
+    print_status "Using init.d script to restart enigma2..."
+    /etc/init.d/enigma2 restart
+elif command -v init >/dev/null 2>&1; then
+    # إعادة تشغيل كاملة للجهاز
+    print_status "Performing full system reboot..."
+    init 6
+elif command -v reboot >/dev/null 2>&1; then
+    # أمر reboot
+    print_status "Rebooting the system..."
+    reboot
 else
-    print_warning "systemctl not found, trying init.d method"
-    if [ -f /etc/init.d/enigma2 ]; then
-        /etc/init.d/enigma2 restart
-    else
-        print_error "Cannot restart Enigma2 automatically. Please restart manually."
-        exit 1
-    fi
+    print_error "Cannot restart automatically. Please restart your receiver manually."
+    exit 1
 fi
 
 echo ""
 echo "=============================================="
 print_success "Installation completed successfully!"
-print_success "STB_UNION E2 has been installed and activated"
+print_success "$PLUGIN_NAME has been installed and activated"
+print_success "The receiver is now restarting..."
 echo "=============================================="
 echo ""
