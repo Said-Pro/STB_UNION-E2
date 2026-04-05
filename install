@@ -94,12 +94,50 @@ cd /tmp/ || exit 1
 # فك الضغط مباشرة إلى المجلد الوجهة
 if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR"; then
     print_success "Extraction completed successfully"
-    print_success "$PLUGIN_NAME has been installed to: $DEST_DIR"
 else
     print_error "Extraction failed!"
     print_error "Please check if the archive is corrupted or destination is writable"
     exit 1
 fi
+
+# ==============================================
+# التحقق من وجود الملفات بعد التثبيت
+# ==============================================
+
+print_status "Verifying plugin installation..."
+
+# الحصول على اسم المجلد المستخرج من الأرشيف
+EXTRACTED_FOLDER=$(tar -tzf STB_UNION-E2.tar.gz 2>/dev/null | head -1 | cut -d '/' -f1)
+
+# التحقق من وجود المجلد المستخرج
+if [ -n "$EXTRACTED_FOLDER" ] && [ -d "$DEST_DIR/$EXTRACTED_FOLDER" ]; then
+    print_success "Plugin folder found: $DEST_DIR/$EXTRACTED_FOLDER"
+    
+    # التحقق من وجود ملف __init__.py (مهم لـ enigma2)
+    if [ -f "$DEST_DIR/$EXTRACTED_FOLDER/__init__.py" ] || [ -f "$DEST_DIR/$EXTRACTED_FOLDER/plugin.py" ]; then
+        print_success "Plugin structure is valid (__init__.py or plugin.py found)"
+    else
+        print_warning "Plugin installed but main files may be missing"
+    fi
+    
+    # عرض محتويات المجلد للتحقق
+    FILE_COUNT=$(find "$DEST_DIR/$EXTRACTED_FOLDER" -type f 2>/dev/null | wc -l)
+    print_success "Plugin contains $FILE_COUNT files"
+    
+elif [ -d "$DEST_DIR/STB_UNION-E2" ]; then
+    print_success "Plugin folder found: $DEST_DIR/STB_UNION-E2"
+    
+    FILE_COUNT=$(find "$DEST_DIR/STB_UNION-E2" -type f 2>/dev/null | wc -l)
+    print_success "Plugin contains $FILE_COUNT files"
+    
+else
+    print_error "Plugin verification failed!"
+    print_error "No plugin folder found in $DEST_DIR"
+    print_error "Installation may be incomplete"
+    exit 1
+fi
+
+print_success "$PLUGIN_NAME has been successfully installed to: $DEST_DIR"
 
 # ==============================================
 # تنظيف الملفات المؤقتة (حذف كل آثار STB_UNION-E2 من /tmp)
@@ -132,39 +170,74 @@ done
 print_success "All traces of STB_UNION-E2 have been removed from /tmp"
 
 # ==============================================
-# إعادة تشغيل الجهاز (الريسيفر)
+# إعادة تشغيل الجهاز (الريسيفر) مع خيار للمستخدم
 # ==============================================
 
-print_status "Restarting the receiver..."
-print_warning "Please wait while the receiver restarts..."
-progress_bar 3
-
-# محاولة طرق مختلفة لإعادة التشغيل
-if command -v systemctl >/dev/null 2>&1; then
-    # نظام systemd
-    print_status "Using systemctl to restart enigma2..."
-    systemctl restart enigma2
-elif [ -f /etc/init.d/enigma2 ]; then
-    # نظام init.d التقليدي
-    print_status "Using init.d script to restart enigma2..."
-    /etc/init.d/enigma2 restart
-elif command -v init >/dev/null 2>&1; then
-    # إعادة تشغيل كاملة للجهاز
-    print_status "Performing full system reboot..."
-    init 6
-elif command -v reboot >/dev/null 2>&1; then
-    # أمر reboot
-    print_status "Rebooting the system..."
-    reboot
-else
-    print_error "Cannot restart automatically. Please restart your receiver manually."
-    exit 1
-fi
-
 echo ""
 echo "=============================================="
-print_success "Installation completed successfully!"
-print_success "$PLUGIN_NAME has been installed and activated"
-print_success "The receiver is now restarting..."
+print_status "Receiver restart option"
 echo "=============================================="
 echo ""
+echo "Do you want to restart the receiver now?"
+echo ""
+echo "  1) Yes, restart now (recommended)"
+echo "  2) No, I will restart manually later"
+echo ""
+printf "Choose option (1 or 2): "
+read -r RESTART_OPTION
+
+case $RESTART_OPTION in
+    1)
+        print_status "Restarting the receiver..."
+        print_warning "Please wait while the receiver restarts..."
+        progress_bar 3
+        
+        # محاولة طرق مختلفة لإعادة التشغيل
+        if command -v systemctl >/dev/null 2>&1; then
+            # نظام systemd
+            print_status "Using systemctl to restart enigma2..."
+            systemctl restart enigma2
+        elif [ -f /etc/init.d/enigma2 ]; then
+            # نظام init.d التقليدي
+            print_status "Using init.d script to restart enigma2..."
+            /etc/init.d/enigma2 restart
+        elif command -v init >/dev/null 2>&1; then
+            # إعادة تشغيل كاملة للجهاز
+            print_status "Performing full system reboot..."
+            init 6
+        elif command -v reboot >/dev/null 2>&1; then
+            # أمر reboot
+            print_status "Rebooting the system..."
+            reboot
+        else
+            print_error "Cannot restart automatically. Please restart your receiver manually."
+            exit 1
+        fi
+        
+        echo ""
+        echo "=============================================="
+        print_success "Installation completed successfully!"
+        print_success "$PLUGIN_NAME has been installed and activated"
+        print_success "The receiver is now restarting..."
+        echo "=============================================="
+        echo ""
+        ;;
+    2)
+        print_warning "Receiver will NOT restart automatically"
+        print_success "Installation completed successfully!"
+        print_success "$PLUGIN_NAME has been installed"
+        print_warning "Please restart your receiver manually to activate the plugin"
+        echo ""
+        echo "=============================================="
+        echo "To restart manually, use one of these commands:"
+        echo "  - systemctl restart enigma2"
+        echo "  - init 6"
+        echo "  - reboot"
+        echo "=============================================="
+        echo ""
+        ;;
+    *)
+        print_error "Invalid option! Please run the script again."
+        exit 1
+        ;;
+esac
