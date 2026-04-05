@@ -65,20 +65,72 @@ else
     exit 1
 fi
 
+# ==============================================
+# فك الضغط (SECTION AMÉLIORÉE)
+# ==============================================
+
+# التأكد من وجود المجلد الوجهة
+DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
+print_status "Checking destination directory..."
+
+if [ ! -d "$DEST_DIR" ]; then
+    print_warning "Destination directory does not exist. Creating it..."
+    if mkdir -p "$DEST_DIR"; then
+        print_success "Directory created: $DEST_DIR"
+    else
+        print_error "Failed to create directory: $DEST_DIR"
+        exit 1
+    fi
+else
+    print_success "Destination directory exists"
+fi
+
 # فك الضغط
 print_status "Extracting files to plugins directory..."
 cd /tmp/ || exit 1
-if tar -xzf STB_UNION-E2.tar.gz -C /usr/lib/enigma2/python/Plugins/Extensions; then
+
+# فك الضغط مع عرض المحتويات
+print_status "Extracting archive contents..."
+if tar -xzf STB_UNION-E2.tar.gz -C "$DEST_DIR" 2>&1; then
     print_success "Extraction completed successfully"
+    
+    # عرض اسم المجلد المستخرج للتحقق
+    EXTRACTED_DIR=$(tar -tzf STB_UNION-E2.tar.gz | head -1 | cut -d '/' -f1)
+    if [ -n "$EXTRACTED_DIR" ] && [ -d "$DEST_DIR/$EXTRACTED_DIR" ]; then
+        print_success "Plugin extracted to: $DEST_DIR/$EXTRACTED_DIR"
+    else
+        print_warning "Plugin extracted but folder structure may be different"
+    fi
 else
     print_error "Extraction failed!"
+    print_error "Please check if the archive is corrupted or destination is writable"
     exit 1
 fi
 
-# تنظيف الملف المؤقت
+# ==============================================
+# تنظيف الملف المؤقت (SECTION AMÉLIORÉE)
+# ==============================================
+
 print_status "Cleaning temporary files..."
-rm -f /tmp/STB_UNION-E2.tar.gz
-print_success "Temporary files removed"
+
+# حذف الملف المضغوط المؤقت
+if rm -f /tmp/STB_UNION-E2.tar.gz; then
+    print_success "Temporary archive removed: /tmp/STB_UNION-E2.tar.gz"
+else
+    print_warning "Could not remove temporary archive (may not exist or permission denied)"
+fi
+
+# تنظيف أي ملفات مؤقتة أخرى (اختياري)
+if [ -d "/tmp/STB_UNION-E2" ]; then
+    rm -rf /tmp/STB_UNION-E2
+    print_success "Temporary extraction directory cleaned"
+fi
+
+print_success "All temporary files have been removed"
+
+# ==============================================
+# CONTINUATION DU SCRIPT
+# ==============================================
 
 # تثبيت الحزم المطلوبة
 print_status "Updating package list and installing dependencies..."
